@@ -219,5 +219,7 @@ def cancel(date_str, lapangan_name, time_slot):
     return redirect(url_for('show_schedule', date_str=date_str))
 
 if __name__ == '__main__':
+    app.run(debug=True)
  
+
 
