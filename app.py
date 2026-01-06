@@ -11,27 +11,30 @@ BOOKINGS_FILE = '/tmp/bookings_data.json'
 bookings = {} 
 
 def load_bookings():
-    """Memuat data dari /tmp jika ada, jika tidak, mulai dari kosong."""
+    """Vercel tidak mendukung file JSON permanen, jadi kita mulai dengan data kosong atau data dari /tmp."""
     global bookings
     if os.path.exists(BOOKINGS_FILE):
         try:
             with open(BOOKINGS_FILE, 'r') as f:
                 data = json.load(f)
                 bookings = data if isinstance(data, dict) else {}
-        except Exception:
+        except:
             bookings = {}
     else:
+        # Jika file tidak ada, jangan error, gunakan memory saja
         bookings = {}
 
 def save_bookings():
-    """Menyimpan data ke /tmp agar tidak menyebabkan Error 500."""
+    """Kita coba simpan ke /tmp (folder sementara Vercel), tapi jika gagal, aplikasi jangan mati."""
     global bookings
     try:
-        with open(BOOKINGS_FILE, 'w') as f:
+        # /tmp adalah satu-satunya folder yang boleh ditulis di Vercel
+        with open('/tmp/bookings_data.json', 'w') as f:
             json.dump(bookings, f, indent=4)
     except Exception as e:
-        print(f"Penyimpanan dilewati (Vercel Limit): {e}")
-
+        # Jika gagal (karena limitasi server), kita abaikan saja. 
+        # Web akan tetap jalan karena data tersimpan di memori (RAM) server selama sesi aktif.
+        print(f"Penyimpanan dilewati: {e}")
 # --- APLIKASI DAN KONFIGURASI FLASK ---
 app = Flask(__name__)
 app.secret_key = 'kunci_rahasia_anda_yang_sangat_aman' 
@@ -221,5 +224,6 @@ def cancel(date_str, lapangan_name, time_slot):
 if __name__ == '__main__':
     app.run(debug=True)
  
+
 
 
