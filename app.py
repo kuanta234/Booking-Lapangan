@@ -5,13 +5,11 @@ import json
 import os
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 
-# --- KONFIGURASI FILE (Disesuaikan untuk Vercel) ---
-# Folder /tmp adalah satu-satunya folder yang bisa ditulisi di Vercel
+# --- KONFIGURASI FILE (Optimasi untuk Vercel) ---
 BOOKINGS_FILE = '/tmp/bookings_data.json' 
 bookings = {} 
 
 def load_bookings():
-    """Vercel tidak mendukung file JSON permanen, jadi kita mulai dengan data kosong atau data dari /tmp."""
     global bookings
     if os.path.exists(BOOKINGS_FILE):
         try:
@@ -21,29 +19,25 @@ def load_bookings():
         except:
             bookings = {}
     else:
-        # Jika file tidak ada, jangan error, gunakan memory saja
         bookings = {}
 
 def save_bookings():
-    """Kita coba simpan ke /tmp (folder sementara Vercel), tapi jika gagal, aplikasi jangan mati."""
     global bookings
     try:
-        # /tmp adalah satu-satunya folder yang boleh ditulis di Vercel
-        with open('/tmp/bookings_data.json', 'w') as f:
+        with open(BOOKINGS_FILE, 'w') as f:
             json.dump(bookings, f, indent=4)
     except Exception as e:
-        # Jika gagal (karena limitasi server), kita abaikan saja. 
-        # Web akan tetap jalan karena data tersimpan di memori (RAM) server selama sesi aktif.
-        print(f"Penyimpanan dilewati: {e}")
+        # Menggunakan print agar error terlihat di Logs Vercel tanpa mematikan web
+        print(f"Penyimpanan File diabaikan: {e}")
+
 # --- APLIKASI DAN KONFIGURASI FLASK ---
 app = Flask(__name__)
-app.secret_key = 'kunci_rahasia_anda_yang_sangat_aman' 
+app.secret_key = 'kunci_rahasia_anda_123' 
 
-# Inisialisasi Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login' 
-login_manager.login_message = "Anda harus login untuk mengakses halaman jadwal."
+login_manager.login_message = "Anda harus login terlebih dahulu."
 login_manager.login_message_category = "warning"
 
 # --- KONSTANTA DATA ---
@@ -56,7 +50,6 @@ USERS = {
     'user2': {'id': 'user2', 'username': 'user2', 'password': 'password123', 'full_name': 'Siti Aisyah'}
 }
 
-# Jam Operasional (09:00 - 18:00)
 JAM_MULAI = list(range(9, 18)) 
 JAM_OPERASIONAL = []
 for h in JAM_MULAI:
@@ -77,7 +70,7 @@ def load_user(user_id):
         return User(USERS[user_id])
     return None
 
-# --- FILTER MATA UANG (Versi Aman untuk Server Cloud) ---
+# --- FILTER MATA UANG ---
 @app.template_filter('currency')
 def format_currency(value):
     try:
@@ -92,7 +85,7 @@ def initialize_day(date_str):
         for lapangan in LAPANGAN_NAMES:
             bookings[date_str][lapangan] = {jam: None for jam in JAM_OPERASIONAL}
 
-# Pastikan data dimuat saat pertama kali dijalankan
+# Load data saat start
 load_bookings()
 
 # --- ROUTES ---
@@ -175,7 +168,7 @@ def book():
             'payment_method': None
         }
         save_bookings()
-        flash('Booking sementara berhasil! Silakan lakukan pembayaran.', 'warning')
+        flash('Booking sementara berhasil! Segera lakukan pembayaran.', 'warning')
     else:
         flash('Slot sudah terisi.', 'danger')
     return redirect(url_for('show_schedule', date_str=date_str))
@@ -189,13 +182,16 @@ def pay():
     payment_method = request.form.get('payment_method')
 
     initialize_day(date_str)
+    # Proteksi jika ada %20 dari browser
+    lapangan_name = lapangan_name.replace('%20', ' ')
+    
     slot = bookings[date_str][lapangan_name].get(time_slot)
 
     if slot and slot['user_name'] == current_user.full_name:
         slot['status'] = 'Paid'
         slot['payment_method'] = payment_method
         save_bookings()
-        flash('Pembayaran berhasil!', 'success')
+        flash('Pembayaran sukses!', 'success')
         return redirect(url_for('receipt', date_str=date_str, lapangan_name=lapangan_name, time_slot=time_slot))
     
     flash('Gagal memproses pembayaran.', 'danger')
@@ -204,16 +200,26 @@ def pay():
 @app.route('/receipt/<date_str>/<lapangan_name>/<time_slot>')
 @login_required
 def receipt(date_str, lapangan_name, time_slot):
+    # Membersihkan %20 menjadi spasi agar tidak KeyError
+    lapangan_name = lapangan_name.replace('%20', ' ')
+    
     initialize_day(date_str)
-    slot = bookings[date_str][lapangan_name].get(time_slot)
+    day_data = bookings.get(date_str, {})
+    lap_data = day_data.get(lapangan_name, {})
+    slot = lap_data.get(time_slot)
+    
     if slot and slot['status'] == 'Paid' and slot['user_name'] == current_user.full_name:
         return render_template('receipt.html', date_str=date_str, lapangan_name=lapangan_name, time_slot=time_slot, slot=slot, web_name=WEB_NAME)
+    
+    flash('Resit tidak ditemukan.', 'danger')
     return redirect(url_for('index'))
 
 @app.route('/cancel/<date_str>/<lapangan_name>/<time_slot>')
 @login_required
 def cancel(date_str, lapangan_name, time_slot):
+    lapangan_name = lapangan_name.replace('%20', ' ')
     initialize_day(date_str)
+    
     slot = bookings[date_str][lapangan_name].get(time_slot)
     if slot and slot['user_name'] == current_user.full_name:
         bookings[date_str][lapangan_name][time_slot] = None
@@ -223,7 +229,6 @@ def cancel(date_str, lapangan_name, time_slot):
 
 if __name__ == '__main__':
     app.run(debug=True)
- 
 
 
 
