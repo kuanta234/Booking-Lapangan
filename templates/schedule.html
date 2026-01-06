@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jadwal - {{ web_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .table-schedule th, .table-schedule td {
+            text-align: center;
+            vertical-align: middle;
+            font-size: 0.9em;
+        }
+        .slot-booked {
+            background-color: #ffc10740; /* Kuning muda */
+            cursor: pointer;
+        }
+        .slot-paid {
+            background-color: #28a74540; /* Hijau muda */
+            cursor: pointer;
+        }
+        .nav-link.active {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        
+        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+            <h1 class="h3 text-primary">{{ web_name }} - Jadwal</h1>
+            <div class="d-flex align-items-center">
+                <span class="me-3">Halo, <strong>{{ current_user.full_name }}</strong></span>
+                <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger">Logout</a>
+            </div>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="row">
+                    <div class="col-12">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message | safe }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-center align-items-center mb-4">
+            
+            {% if is_current_date_today %}
+                <button class="btn btn-secondary me-3" disabled title="Tidak bisa melihat jadwal sebelum hari ini">
+                    &laquo; Hari Sebelumnya
+                </button>
+            {% else %}
+                <a href="{{ url_for('show_schedule', date_str=prev_date) }}" class="btn btn-secondary me-3">
+                    &laquo; Hari Sebelumnya
+                </a>
+            {% endif %}
+
+            <h3 class="h4 mb-0">{{ date_str }}</h3>
+
+            <a href="{{ url_for('show_schedule', date_str=next_date) }}" class="btn btn-secondary ms-3">
+                Hari Berikutnya &raquo;
+            </a>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-schedule">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 15%;">Jam/Slot (Rp {{ price_per_hour | currency }})</th>
+                        {% for lapangan in lapangan_names %}
+                            <th>{{ lapangan }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for time_slot in jam_operasional %}
+                        <tr>
+                            <td class="bg-light"><strong>{{ time_slot }}</strong></td>
+                            
+                            {% for lapangan in lapangan_names %}
+                                {% set slot_info = schedule[lapangan][time_slot] %}
+                                
+                                {% if slot_info is none %}
+                                    <td>
+                                        <form method="POST" action="{{ url_for('book') }}">
+                                            <input type="hidden" name="date" value="{{ date_str }}">
+                                            <input type="hidden" name="lapangan" value="{{ lapangan }}">
+                                            <input type="hidden" name="time" value="{{ time_slot }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-success">Booking</button>
+                                        </form>
+                                    </td>
+                                    
+                                {% elif slot_info.status == 'Booked' %}
+                                    <td class="slot-booked" data-bs-toggle="modal" data-bs-target="#modalPayCancel" 
+                                        data-date="{{ date_str }}" data-lapangan="{{ lapangan }}" data-time="{{ time_slot }}" 
+                                        data-user="{{ slot_info.user_name }}" data-status="{{ slot_info.status }}" 
+                                        data-is-owner="{{ 'true' if slot_info.user_name == current_user.full_name else 'false' }}">
+                                        Dibooking oleh 
+                                        <br><strong>{{ slot_info.user_name }}</strong>
+                                        {% if slot_info.user_name == current_user.full_name %}
+                                            <span class="badge bg-warning text-dark mt-1">BELUM BAYAR</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary mt-1">Booked</span>
+                                        {% endif %}
+                                    </td>
+                                    
+                                {% elif slot_info.status == 'Paid' %}
+                                    <td class="slot-paid" data-bs-toggle="modal" data-bs-target="#modalPayCancel"
+                                        data-date="{{ date_str }}" data-lapangan="{{ lapangan }}" data-time="{{ time_slot }}" 
+                                        data-user="{{ slot_info.user_name }}" data-status="{{ slot_info.status }}"
+                                        data-is-owner="{{ 'true' if slot_info.user_name == current_user.full_name else 'false' }}">
+                                        Dibayar oleh 
+                                        <br><strong>{{ slot_info.user_name }}</strong>
+                                        <span class="badge bg-success mt-1">PAID</span>
+                                    </td>
+
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalPayCancel" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalLabel">Detail Booking</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Lapangan: <strong id="modalLapangan"></strong></p>
+                    <p>Tanggal: <strong id="modalDate"></strong></p>
+                    <p>Waktu: <strong id="modalTime"></strong></p>
+                    <p>Pemesan: <strong id="modalUser"></strong></p>
+                    <p>Status: <strong id="modalStatus"></strong></p>
+                    <p>Harga: <strong class="text-success">Rp {{ price_per_hour | currency }}</strong></p>
+                    <hr>
+
+                    <div id="paymentOptions" class="mt-3">
+                        <h6>Lakukan Pembayaran:</h6>
+                        <form method="POST" action="{{ url_for('pay') }}" class="d-grid gap-2">
+                            <input type="hidden" id="payDate" name="date">
+                            <input type="hidden" id="payLapangan" name="lapangan">
+                            <input type="hidden" id="payTime" name="time">
+                            <select name="payment_method" class="form-select mb-2" required>
+                                <option value="" selected disabled>Pilih Metode Pembayaran</option>
+                                <option value="Transfer Bank">Transfer Bank</option>
+                                <option value="E-Wallet">E-Wallet</option>
+                                <option value="Cash">Cash</option>
+                            </select>
+                            <button type="submit" class="btn btn-success">Bayar Sekarang</button>
+                        </form>
+                    </div>
+
+                    <div id="otherOptions" class="mt-4 d-grid gap-2">
+                        <a id="receiptLink" href="#" class="btn btn-info text-white">Lihat Resit Pembayaran</a>
+                        
+                        <a id="cancelLink" href="#" class="btn btn-warning">Batalkan Pesanan</a>
+                    </div>
+
+                    <div id="nonOwnerMessage" class="mt-3 alert alert-secondary" style="display:none;">
+                        Ini adalah pesanan akun lain. Anda hanya dapat melihat statusnya.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const modalPayCancel = document.getElementById('modalPayCancel');
+        modalPayCancel.addEventListener('show.bs.modal', event => {
+            const button = event.relatedTarget;
+            
+            const date = button.getAttribute('data-date');
+            const lapangan = button.getAttribute('data-lapangan');
+            const time = button.getAttribute('data-time');
+            const user = button.getAttribute('data-user');
+            const status = button.getAttribute('data-status');
+            const isOwner = button.getAttribute('data-is-owner') === 'true'; 
+
+            // Update Modal Content
+            document.getElementById('modalLapangan').textContent = lapangan;
+            document.getElementById('modalDate').textContent = date;
+            document.getElementById('modalTime').textContent = time;
+            document.getElementById('modalUser').textContent = user;
+            document.getElementById('modalStatus').textContent = status;
+
+            // Update Hidden Fields for Payment Form
+            document.getElementById('payDate').value = date;
+            document.getElementById('payLapangan').value = lapangan;
+            document.getElementById('payTime').value = time;
+            
+            // Logika Visibilitas Tombol
+            const paymentOptions = document.getElementById('paymentOptions');
+            const receiptLink = document.getElementById('receiptLink');
+            const cancelLink = document.getElementById('cancelLink');
+            const nonOwnerMessage = document.getElementById('nonOwnerMessage');
+
+            // Reset tampilan
+            paymentOptions.style.display = 'none';
+            receiptLink.style.display = 'none';
+            cancelLink.style.display = 'none';
+            nonOwnerMessage.style.display = 'none';
+            
+            if (isOwner) {
+                if (status === 'Booked') {
+                    paymentOptions.style.display = 'block'; // Tampilkan opsi bayar
+                    cancelLink.style.display = 'block'; // Tampilkan opsi batal
+                    cancelLink.href = `{{ url_for('cancel', date_str='DATE', lapangan_name='LAPANGAN', time_slot='TIME') }}`
+                                        .replace('DATE', date).replace('LAPANGAN', lapangan).replace('TIME', time);
+                    cancelLink.className = 'btn btn-danger';
+                } else if (status === 'Paid') {
+                    receiptLink.style.display = 'block'; // Tampilkan link resit
+                    receiptLink.href = `{{ url_for('receipt', date_str='DATE', lapangan_name='LAPANGAN', time_slot='TIME') }}`
+                                        .replace('DATE', date).replace('LAPANGAN', lapangan).replace('TIME', time);
+                    cancelLink.style.display = 'block'; // Opsi batal (jika Paid)
+                    cancelLink.href = `{{ url_for('cancel', date_str='DATE', lapangan_name='LAPANGAN', time_slot='TIME') }}`
+                                        .replace('DATE', date).replace('LAPANGAN', lapangan).replace('TIME', time);
+                    cancelLink.className = 'btn btn-warning';
+                }
+            } else {
+                nonOwnerMessage.style.display = 'block'; // Pesan untuk non-pemilik
+                
+                // Jika sudah Paid, tetap berikan link resit (karena link otorisasi ada di Python)
+                if (status === 'Paid') {
+                     receiptLink.style.display = 'block';
+                     receiptLink.href = `{{ url_for('receipt', date_str='DATE', lapangan_name='LAPANGAN', time_slot='TIME') }}`
+                                        .replace('DATE', date).replace('LAPANGAN', lapangan).replace('TIME', time);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

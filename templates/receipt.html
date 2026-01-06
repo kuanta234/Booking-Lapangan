@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resit Pembayaran - {{ web_name }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+        .receipt-box { max-width: 500px; margin: 50px auto; padding: 30px; border: 1px solid #ccc; border-radius: 8px; background-color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .receipt-box h1 { text-align: center; color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
+        .receipt-details p { margin: 10px 0; line-height: 1.5; }
+        .total { font-size: 1.5em; font-weight: bold; margin-top: 20px; padding: 10px 0; border-top: 1px dashed #ccc; }
+        .footer { text-align: center; margin-top: 30px; font-size: 0.9em; color: #777; }
+        .btn-back { display: inline-block; margin-top: 20px; padding: 10px 15px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="receipt-box">
+        <h1>✅ Kwitansi Pembayaran</h1>
+
+        <div class="receipt-details">
+            <p><strong>ID Booking:</strong> {{ slot.id }}</p>
+            <p><strong>Nama Pemesan:</strong> {{ slot.user_name }}</p>
+            <p><strong>Tanggal Booking:</strong> {{ date_str }}</p>
+            <p><strong>Waktu Booking:</strong> {{ time_slot }}</p>
+            <p><strong>Lapangan:</strong> {{ lapangan_name }}</p>
+            <p><strong>Status:</strong> <span style="color: green;">{{ slot.status }}</span></p>
+            <p><strong>Metode Pembayaran:</strong> {{ slot.payment_method }}</p>
+        </div>
+
+        <div class="total">
+            Total Pembayaran: Rp {{ slot.price | currency }}
+        </div>
+
+        <div class="footer">
+            Terima kasih telah melakukan booking di {{ web_name }}. Selamat bermain.
+        </div>
+
+        <a href="{{ url_for('show_schedule', date_str=date_str) }}" class="btn-back">Kembali ke Jadwal</a>
+    </div>
+
+</body>
+</html>
